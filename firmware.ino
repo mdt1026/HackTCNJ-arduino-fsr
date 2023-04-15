@@ -213,6 +213,7 @@ const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
 
 /*** BEGIN SerialProcessor Class ***/
+
 class SerialProcessor {
   public:
     void init(long baud_rate) { Serial.begin(baud_rate); }
@@ -238,7 +239,7 @@ class SerialProcessor {
           print_thresholds();
           break;
         case '0' ... '9':
-          update_print_threshold();
+          update_print_thresholds(num_bytes);
         default:
           break;
         }
@@ -249,10 +250,11 @@ class SerialProcessor {
       for (size_t i=0; i < NUM_FSRS; i++) {
         fsrs[i].set_offset();
       }
+    }
 
     void print_values() {
       Serial.print("values: ");
-      for (size_t i=0; i < NUM_SENSORS; i++) {
+      for (size_t i=0; i < NUM_FSRS; i++) {
         Serial.print(" ");
         Serial.print(fsrs[i].get_value());
       }
@@ -261,7 +263,7 @@ class SerialProcessor {
 
     void print_thresholds() {
       Serial.print("thresholds: ");
-      for (size_t i=0; i < NUM_SENSORS; i++) {
+      for (size_t i=0; i < NUM_FSRS; i++) {
         Serial.print(" ");
         Serial.print(fsrs[i].get_threshold());
       }
@@ -276,9 +278,9 @@ class SerialProcessor {
 
       char* next = nullptr;
       size_t index = strtoul(_buffer, &next, 10);
-      if (index >= NUM_SENSORS) { return; }
+      if (index >= NUM_FSRS) { return; }
 
-      uint16_t threshold = stroul(next, nullptr, 10);
+      uint16_t threshold = strtoul(next, nullptr, 10);
       if (threshold > 1023) { return; }
 
       fsrs[index].set_threshold(threshold);
@@ -288,8 +290,10 @@ class SerialProcessor {
   private:
     static const size_t BUFFER_SIZE = 64;
     char _buffer[BUFFER_SIZE];
-}
+};
+
 /*** END SerialProcessor Class ***/
+
 SerialProcessor serialProcessor;
 
 unsigned long sent_time = 0;
@@ -299,14 +303,13 @@ void setup() {
   serialProcessor.init(BAUD_RATE);
   input_start();
 
-  for (size_t i=0; i < NUM_SENSORS; i++) {
+  for (size_t i=0; i < NUM_FSRS; i++) {
     fsrs[i].init(i+1);
   }
 
   #if defined(CLEAR_BIT) && defined(SET_BIT)
 	  // Set the ADC prescaler to 16 for boards that support it,
-	  // which is a good balance between speed and accuracy.
-	  // More information can be found here: http://www.gammon.com.au/adc
+	  // which is a good balance between speed and accuracy.  // More information can be found here: http://www.gammon.com.au/adc
 	  SET_BIT(ADCSRA, ADPS2);
 	  CLEAR_BIT(ADCSRA, ADPS1);
 	  CLEAR_BIT(ADCSRA, ADPS0);
@@ -320,7 +323,7 @@ void loop() {
 
   serialProcessor.read_data();
 
-  for (size_t i=0; i < NUM_SENSORS; i++) {
+  for (size_t i=0; i < NUM_FSRS; i++) {
     fsrs[i].eval_fsr(will_send);
   }
 
