@@ -8,8 +8,10 @@
 
 #include "Keyboard.h"
 
-const size_t MAX_SHARED_SENSORS = 2;
 const long BAUD_RATE = 57600;
+const size_t MAX_SHARED_SENSORS = 2;
+const uint16_t DEFAULT_THRESHOLD = 1000;
+
 uint8_t current_button = 1;
 
 
@@ -101,7 +103,15 @@ class FsrState {
       }
     }
 
-    size_t get_index(uint8_t fsr_id);
+    size_t get_index(uint8_t fsr_id) {
+      for (size_t i = 0; i < _count; i++) {
+        if (_ids[i] == fsr_id) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
   private:
     const uint16_t PADDING_WIDTH = 1;
     enum State { Off, On };
@@ -117,26 +127,72 @@ class FsrState {
 
 /*** END FsrState Class ***/
 
+
 /*** BEGIN Fsr Class ***/
 
 // Define class for each sensor's information
 class Fsr {
   public:
-    Fsr(uint8_t pin, FsrState* state = nullptr);
-    ~Fsr();
-    void init(uint8_t id);
-    void add_fsr(uint8_t fsr_id);
-    void eval_fsr(uint8_t fsr_id, uint16_t value, uint16_t threshold);
-    size_t get_index(uint8_t fsr_id);
+    // TODO Add moving_average to initialization list
+    Fsr(uint8_t pin, FsrState* state = nullptr) : _initialized(false), _pin(pin), _threshold(DEFAULT_THRESHOLD), _offset(0), _state_owner(false) {}
+
+    ~Fsr() { if (_state_owner) { delete _state; } }
+
+    void init(uint8_t id) {
+      if (_initialized) { return; }
+      if (!id) { return; }
+
+      if (_state == nullptr) {
+        _state = new FsrState();
+        _state_owner = true;
+      }
+
+      _state->init();
+
+      if (_state->get_index(id) < 0) { _state->add_fsr(id); }
+      _fsr_id = id;
+      _initialized = true;
+    }
+
+    void eval_fsr(bool will_send) {
+      if (!_initialized) { return; }
+      if (_state->get_index(_fsr_id) < 0) { return; }
+
+      int16_t value = analogRead(_pin);
+      // TODO Implement Moving Average smoothing on sensor value
+      _value = value;
+
+
+      if (will_send) { _state->eval_fsr(_fsr_id, _value, _threshold); }
+    }
+
+    void set_threshold(uint16_t threshold) { _threshold = threshold; }
+    uint16_t get_threshold() { return _threshold; }
+
+    // Set offset to last read value and return offset
+    // NOTE: Should be called with no applied pressure for calibration.
+    uint16_t set_offset() {
+      _offset = _value;
+      return _offset;
+    }
+
+    uint16_t get_value() { return _value; }
+
+    // Remove the default constructor so pin must be given
+    Fsr() = delete;
+
   private:
     bool _initialized;
-    uint8_t _ids[];
-    size_t _count;
-    enum State { Off, On };
-    State _states[];
-    State _combined_state = On;
-    const uint16_t PADDING_WIDTH;
-    uint8_t button_id;
+    bool _state_owner;
+
+    uint8_t _fsr_id;
+    uint8_t _pin;
+    uint16_t _threshold;
+    uint16_t _value;
+    uint16_t _offset;
+
+    // TODO HullMovingAverage moving_average_
+    FsrState* _state;
 };
 
 /*** END Fsr Class ***/
