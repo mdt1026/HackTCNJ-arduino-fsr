@@ -6,16 +6,15 @@
 */
 #include <inttypes.h>
 
-#include "Keyboard.h"
-
-const long BAUD_RATE = 57600;
-const size_t MAX_SHARED_SENSORS = 2;
-const uint16_t DEFAULT_THRESHOLD = 1000;
-
-uint8_t current_button = 1;
+#if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
+  #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+  #define SET_BIT(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
 
 
 /*** BEGIN Keyboard | Joystick Functions ***/
+#include "Keyboard.h"
+
 void input_start() {
   Keyboard.begin();
 }
@@ -27,6 +26,12 @@ void input_release(uint8_t id) {
 }
 
 /*** END Keyboard | Joystick Functions ***/
+
+const long BAUD_RATE = 57600;
+const size_t MAX_SHARED_SENSORS = 2;
+const uint16_t DEFAULT_THRESHOLD = 1000;
+
+uint8_t current_button = 1;
 
 
 /*** BEGIN FsrState Class ***/
@@ -121,8 +126,8 @@ class FsrState {
     uint8_t button_id;
     State _combined_state = FsrState::On;
 
-    uint8_t _ids[];
-    State _states[];
+    uint8_t _ids[MAX_SHARED_SENSORS];
+    State _states[MAX_SHARED_SENSORS];
 };
 
 /*** END FsrState Class ***/
@@ -197,12 +202,134 @@ class Fsr {
 
 /*** END Fsr Class ***/
 
-void setup() {
-  Serial.begin(BAUD_RATE);
+/* Define the sensors and set their pins */
+Fsr fsrs[] = {
+  Fsr(A0),
+  Fsr(A1),
+  Fsr(A2),
+  Fsr(A3),
+};
+const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
+
+/*** BEGIN SerialProcessor Class ***/
+class SerialProcessor {
+  public:
+    void init(long baud_rate) { Serial.begin(baud_rate); }
+
+    void read_data() {
+      while (Serial.available() > 0) {
+        size_t num_bytes = Serial.readBytesUntil('\n', _buffer, BUFFER_SIZE-1);
+        _buffer[num_bytes] = '\0';
+
+        if (num_bytes == 0) { return; }
+
+        switch(_buffer[0]) {
+        case 'o':
+        case 'O':
+          set_offsets();
+          break;
+        case 'v':
+        case 'V':
+          print_values();
+          break;
+        case 't':
+        case 'T':
+          print_thresholds();
+          break;
+        case '0' ... '9':
+          update_print_threshold();
+        default:
+          break;
+        }
+      }
+    }
+
+    void set_offsets() {
+      for (size_t i=0; i < NUM_FSRS; i++) {
+        fsrs[i].set_offset();
+      }
+
+    void print_values() {
+      Serial.print("values: ");
+      for (size_t i=0; i < NUM_SENSORS; i++) {
+        Serial.print(" ");
+        Serial.print(fsrs[i].get_value());
+      }
+      Serial.print("\n");
+    }
+
+    void print_thresholds() {
+      Serial.print("thresholds: ");
+      for (size_t i=0; i < NUM_SENSORS; i++) {
+        Serial.print(" ");
+        Serial.print(fsrs[i].get_threshold());
+      }
+      Serial.print("\n");
+    }
+
+    void update_print_thresholds(size_t num_bytes) {
+      // FSR number + Threshold value with a space in between
+      // {0, 1, 2, 3, ...} + "0"-"1023"
+      // e.g. 3 180 (4th FSR, set threshold to 180
+      if (num_bytes < 3 || num_bytes > 7) { return; }
+
+      char* next = nullptr;
+      size_t index = strtoul(_buffer, &next, 10);
+      if (index >= NUM_SENSORS) { return; }
+
+      uint16_t threshold = stroul(next, nullptr, 10);
+      if (threshold > 1023) { return; }
+
+      fsrs[index].set_threshold(threshold);
+      print_thresholds();
+    }
+
+  private:
+    static const size_t BUFFER_SIZE = 64;
+    char _buffer[BUFFER_SIZE];
+}
+/*** END SerialProcessor Class ***/
+SerialProcessor serialProcessor;
+
+unsigned long sent_time = 0;
+long loop_duration = -1;
+
+void setup() {
+  serialProcessor.init(BAUD_RATE);
   input_start();
+
+  for (size_t i=0; i < NUM_SENSORS; i++) {
+    fsrs[i].init(i+1);
+  }
+
+  #if defined(CLEAR_BIT) && defined(SET_BIT)
+	  // Set the ADC prescaler to 16 for boards that support it,
+	  // which is a good balance between speed and accuracy.
+	  // More information can be found here: http://www.gammon.com.au/adc
+	  SET_BIT(ADCSRA, ADPS2);
+	  CLEAR_BIT(ADCSRA, ADPS1);
+	  CLEAR_BIT(ADCSRA, ADPS0);
+  #endif
 }
 
 void loop() {
-  
+  unsigned long start_microsec = micros();
+  static bool will_send;
+  will_send = (loop_duration == -1 || start_microsec - sent_time + loop_duration >= 1000);
+
+  serialProcessor.read_data();
+
+  for (size_t i=0; i < NUM_SENSORS; i++) {
+    fsrs[i].eval_fsr(will_send);
+  }
+
+  if (will_send) {
+    sent_time = start_microsec;
+    // TODO Send Joystick
+  }
+
+  if (loop_duration == -1) {
+    loop_duration = micros() - start_microsec;
+  }
 }
