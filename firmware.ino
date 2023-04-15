@@ -6,16 +6,15 @@
 */
 #include <inttypes.h>
 
-#include "Keyboard.h"
-
-const long BAUD_RATE = 57600;
-const size_t MAX_SHARED_SENSORS = 2;
-const uint16_t DEFAULT_THRESHOLD = 1000;
-
-uint8_t current_button = 1;
+#if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
+  #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+  #define SET_BIT(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
 
 
 /*** BEGIN Keyboard | Joystick Functions ***/
+#include "Keyboard.h"
+
 void input_start() {
   Keyboard.begin();
 }
@@ -27,6 +26,12 @@ void input_release(uint8_t id) {
 }
 
 /*** END Keyboard | Joystick Functions ***/
+
+const long BAUD_RATE = 57600;
+const size_t MAX_SHARED_SENSORS = 2;
+const uint16_t DEFAULT_THRESHOLD = 1000;
+
+uint8_t current_button = 1;
 
 
 /*** BEGIN FsrState Class ***/
@@ -206,6 +211,7 @@ Fsr fsrs[] = {
 };
 const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
+
 /*** BEGIN SerialProcessor Class ***/
 class SerialProcessor {
   public:
@@ -284,13 +290,46 @@ class SerialProcessor {
     char _buffer[BUFFER_SIZE];
 }
 /*** END SerialProcessor Class ***/
+SerialProcessor serialProcessor;
+
+unsigned long sent_time = 0;
+long loop_duration = -1;
 
 void setup() {
-  Serial.begin(BAUD_RATE);
-
+  serialProcessor.init(BAUD_RATE);
   input_start();
+
+  for (size_t i=0; i < NUM_SENSORS; i++) {
+    fsrs[i].init(i+1);
+  }
+
+  #if defined(CLEAR_BIT) && defined(SET_BIT)
+	  // Set the ADC prescaler to 16 for boards that support it,
+	  // which is a good balance between speed and accuracy.
+	  // More information can be found here: http://www.gammon.com.au/adc
+	  SET_BIT(ADCSRA, ADPS2);
+	  CLEAR_BIT(ADCSRA, ADPS1);
+	  CLEAR_BIT(ADCSRA, ADPS0);
+  #endif
 }
 
 void loop() {
-  
+  unsigned long start_microsec = micros();
+  static bool will_send;
+  will_send = (loop_duration == -1 || start_microsec - sent_time + loop_duration >= 1000);
+
+  serialProcessor.read_data();
+
+  for (size_t i=0; i < NUM_SENSORS; i++) {
+    fsrs[i].eval_fsr(will_send);
+  }
+
+  if (will_send) {
+    sent_time = start_microsec;
+    // TODO Send Joystick
+  }
+
+  if (loop_duration == -1) {
+    loop_duration = micros() - start_microsec;
+  }
 }
