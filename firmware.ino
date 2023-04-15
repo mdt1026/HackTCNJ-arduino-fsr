@@ -165,8 +165,11 @@ class Fsr {
 
       int16_t value = analogRead(_pin);
       // TODO Implement Moving Average smoothing on sensor value
-      _value = value;
-
+      if (_offset > value) {
+        _value = 0;
+      } else {
+        _value = value - _offset;
+      }
 
       if (will_send) { _state->eval_fsr(_fsr_id, _value, _threshold); }
     }
@@ -247,13 +250,16 @@ class SerialProcessor {
     }
 
     void set_offsets() {
+      Serial.print("o");
       for (size_t i=0; i < NUM_FSRS; i++) {
-        fsrs[i].set_offset();
+        Serial.print(" ");
+        Serial.print(fsrs[i].set_offset());
       }
+      Serial.print("\n");
     }
 
     void print_values() {
-      Serial.print("values: ");
+      Serial.print("v");
       for (size_t i=0; i < NUM_FSRS; i++) {
         Serial.print(" ");
         Serial.print(fsrs[i].get_value());
@@ -262,7 +268,7 @@ class SerialProcessor {
     }
 
     void print_thresholds() {
-      Serial.print("thresholds: ");
+      Serial.print("t");
       for (size_t i=0; i < NUM_FSRS; i++) {
         Serial.print(" ");
         Serial.print(fsrs[i].get_threshold());
