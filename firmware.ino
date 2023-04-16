@@ -6,6 +6,8 @@
 */
 #include <inttypes.h>
 
+#include "fsr_globals.h"
+
 #if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
   #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
   #define SET_BIT(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
@@ -28,8 +30,9 @@ void input_release(uint8_t id) {
 /*** END Keyboard | Joystick Functions ***/
 
 const long BAUD_RATE = 57600;
-const size_t MAX_SHARED_SENSORS = 2;
 const uint16_t DEFAULT_THRESHOLD = 1000;
+const size_t MAX_SHARED_SENSORS = 2;
+const size_t WMA_MAX_WIDTH = 50;
 
 uint8_t current_button = 1;
 
@@ -206,6 +209,10 @@ class Fsr {
 /*** END Fsr Class ***/
 
 /* Define the sensors and set their pins */
+// A0 | Left
+// A1 | Down
+// A2 | Up
+// A3 | Right
 Fsr fsrs[] = {
   Fsr(A0),
   Fsr(A1),
