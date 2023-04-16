@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .modal-container {
+    perspective: 800px;
+    transform-style: preserve-3d;
+    transition: transform 0.3s ease-out;
+  }
+}
