@@ -12,13 +12,13 @@ class WeightedMovingAverage {
   public:
     WeightedMovingAverage() = delete;
     WeightedMovingAverage(size_t);
-    uint16_t get_average(uint16_t);
+    int16_t get_average(uint16_t);
   private:
     size_t _count;
     size_t _width;
-    uint32_t _sum;
-    uint32_t _weighted;
-    uint16_t _values[WMA_MAX_WIDTH];
+    int32_t _sum;
+    int32_t _weighted;
+    int16_t _values[WMA_MAX_WIDTH];
 };
 
 #endif

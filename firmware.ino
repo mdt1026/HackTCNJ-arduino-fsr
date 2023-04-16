@@ -169,11 +169,16 @@ class Fsr {
       if (_state->get_index(_fsr_id) == -1) { return; }
 
       uint16_t value = analogRead(_pin);
+      // Serial.print(_fsr_id);
+      // Serial.print(" ");
+      // Serial.println(value);
 
-      // DONE Implement Moving Average smoothing on sensor value
-      uint16_t smooth_value = _hma.get_average(value) - _offset;
-      _value = constrain(smooth_value, 0, 1023);
+      // TODO Implement Moving Average smoothing on sensor value
+      // _value = _hma.get_average(value) - _offset;
+      _value = constrain(value - _offset, 0, 1023);
 
+      // Serial.print(">> ");
+      // Serial.println(_value);
       if (will_send) { _state->eval_fsr(_fsr_id, _value, _threshold); }
     }
 
@@ -209,14 +214,14 @@ class Fsr {
 /*** END Fsr Class ***/
 
 /* Define the sensors and set their pins */
-// A4  | Left
+// A3  | Left
 // A8  | Down
-// A1  | Up
+// A0  | Up
 // A11 | Right
 Fsr fsrs[] = {
-  Fsr(A4),
+  Fsr(A3),
   Fsr(A8),
-  Fsr(A1),
+  Fsr(A0),
   Fsr(A11),
 };
 const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
@@ -351,4 +356,6 @@ void loop() {
   if (loop_duration == -1) {
     loop_duration = micros() - start_microsec;
   }
+
+  // delay(500);
 }
