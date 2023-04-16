@@ -30,7 +30,7 @@ void input_release(uint8_t id) {
 
 /*** END Keyboard | Joystick Functions ***/
 
-extern const size_t WMA_MAX_WIDTH;
+// extern const size_t WMA_MAX_WIDTH;
 
 uint8_t current_button = 1;
 
