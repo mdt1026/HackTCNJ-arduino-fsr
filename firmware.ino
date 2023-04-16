@@ -7,6 +7,7 @@
 #include <inttypes.h>
 
 #include "fsr_globals.h"
+#include "hma.h"
 
 #if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
   #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
@@ -29,9 +30,7 @@ void input_release(uint8_t id) {
 
 /*** END Keyboard | Joystick Functions ***/
 
-const long BAUD_RATE = 57600;
-const size_t MAX_SHARED_SENSORS = 2;
-const uint16_t DEFAULT_THRESHOLD = 50;
+extern const size_t WMA_MAX_WIDTH;
 
 uint8_t current_button = 1;
 
@@ -145,7 +144,7 @@ class FsrState {
 class Fsr {
   public:
     // TODO Add moving_average to initialization list
-    Fsr(uint8_t pin, FsrState* state = nullptr) : _initialized(false), _pin(pin), _threshold(DEFAULT_THRESHOLD), _offset(0), _state_owner(false) {}
+    Fsr(uint8_t pin, FsrState* state = nullptr) : _initialized(false), _pin(pin), _threshold(DEFAULT_THRESHOLD), _hma(WMA_MAX_WIDTH), _offset(0), _state_owner(false) {}
 
     ~Fsr() { if (_state_owner) { delete _state; } }
 
@@ -169,13 +168,11 @@ class Fsr {
       if (!_initialized) { return; }
       if (_state->get_index(_fsr_id) == -1) { return; }
 
-      int16_t value = analogRead(_pin);
-      // TODO Implement Moving Average smoothing on sensor value
-      if (_offset > value) {
-        _value = 0;
-      } else {
-        _value = value - _offset;
-      }
+      uint16_t value = analogRead(_pin);
+
+      // DONE Implement Moving Average smoothing on sensor value
+      uint16_t smooth_value = _hma.get_average(value) - _offset;
+      _value = constrain(smooth_value, 0, 1023);
 
       if (will_send) { _state->eval_fsr(_fsr_id, _value, _threshold); }
     }
@@ -205,22 +202,22 @@ class Fsr {
     uint16_t _value;
     uint16_t _offset;
 
-    // TODO HullMovingAverage moving_average_
+    HullMovingAverage _hma;
     FsrState* _state;
 };
 
 /*** END Fsr Class ***/
 
 /* Define the sensors and set their pins */
-// A0 | Left
-// A1 | Down
-// A2 | Up
-// A3 | Right
+// A3 | Left
+// A2 | Down
+// A0 | Up
+// A1 | Right
 Fsr fsrs[] = {
+  Fsr(A3),
+  Fsr(A2),
   Fsr(A0),
   Fsr(A1),
-  Fsr(A2),
-  Fsr(A3),
 };
 const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
