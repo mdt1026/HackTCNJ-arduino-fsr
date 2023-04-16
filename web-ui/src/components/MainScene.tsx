@@ -1,11 +1,16 @@
 import * as THREE from "three";
+import * as TWEEN from "@tweenjs/tween.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { useEffect, useRef, useState } from "react";
 
-export default function MainScene() {
-  const [] = useState(null);
+export default function MainScene(props: {
+  toggleModal: boolean;
+  setToggleModalCallback: any;
+  pads: string[];
+  setPadsCallback: any;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -54,7 +59,7 @@ export default function MainScene() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     // Set the background color of the scene to white
-    renderer.setClearColor(0xffffff);
+    renderer.setClearColor(0xd8dee9);
 
     // Load our assets
     const dracoLoader = new DRACOLoader();
@@ -64,12 +69,15 @@ export default function MainScene() {
     loader.setDRACOLoader(dracoLoader);
 
     let desiredChild: THREE.Object3D[] = [];
+    let GLTFScene: any;
 
     loader.load(
       "/models/main.glb",
       (gltf) => {
         console.log("Loaded GLB file", gltf.scene);
         scene.add(gltf.scene);
+        console.log(gltf.scene);
+        GLTFScene = gltf.scene;
 
         for (let child of gltf.scene.children) {
           if (
@@ -106,13 +114,76 @@ export default function MainScene() {
       // Calculate objects intersecting the picking ray
       const intersects = raycaster.intersectObjects(scene.children, true);
 
-      // Check if the desired child object is intersected and log "hello world"
       for (let intersect of intersects) {
         if (desiredChild.includes(intersect.object)) {
-          console.log(intersect);
+          // console.log(intersect);
+
+          desiredChild.forEach((child) => {
+            if (child.name === intersect.object.name) {
+              // Add the color to the object that was clicked
+              if (child.material.color.getHex() === 0x000000) {
+                child.material.color.set(2960685);
+                props.setPadsCallback((oldPads: string[]) => {
+                  return oldPads.filter((pad) => pad !== child.name);
+                });
+              } else {
+                child.material.color.set(0x000000);
+                props.setPadsCallback((oldPads: string[]) => {
+                  return [...oldPads, child.name];
+                });
+              }
+            }
+          });
+          moveCameraTo(new THREE.Vector3(5, 10, 0), 800);
+
+          const newPosition = GLTFScene.position.clone();
+          if (newPosition.z === 0) {
+            newPosition.z += 2;
+            moveObjectTo(GLTFScene, newPosition, 800);
+          }
+
+          props.setToggleModalCallback(true);
           break;
         }
       }
+    }
+
+    // Function to smoothly move the camera to a new position
+    function moveCameraTo(newPosition: THREE.Vector3, duration: number) {
+      const initialPosition = new THREE.Vector3().copy(camera.position);
+      const tween = new TWEEN.Tween(initialPosition)
+        .to(newPosition, duration)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => {
+          camera.position.set(
+            initialPosition.x,
+            initialPosition.y,
+            initialPosition.z
+          );
+
+          camera.lookAt(scene.position);
+        })
+        .start();
+    }
+
+    // Function to smoothly move an object to a new position
+    function moveObjectTo(
+      object: THREE.Object3D,
+      newPosition: THREE.Vector3,
+      duration: number
+    ) {
+      const initialPosition = new THREE.Vector3().copy(object.position);
+      const tween = new TWEEN.Tween(initialPosition)
+        .to(newPosition, duration)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => {
+          object.position.set(
+            initialPosition.x,
+            initialPosition.y,
+            initialPosition.z
+          );
+        })
+        .start();
     }
 
     // Add event listener for mouse clicks
@@ -131,6 +202,10 @@ export default function MainScene() {
     // Animate the cube
     function animate() {
       requestAnimationFrame(animate);
+
+      TWEEN.update();
+
+      controls.update();
       renderer.render(scene, camera);
     }
     animate();
@@ -138,7 +213,7 @@ export default function MainScene() {
 
   return (
     <div className="h-screen w-screen">
-      <canvas ref={canvasRef} className="h-full w-full bg-white"></canvas>
+      <canvas ref={canvasRef} className="h-full w-full"></canvas>
     </div>
   );
 }
