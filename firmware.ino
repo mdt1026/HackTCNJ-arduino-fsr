@@ -6,6 +6,8 @@
 */
 #include <inttypes.h>
 
+#include "fsr_globals.h"
+
 #if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
   #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
   #define SET_BIT(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
@@ -210,6 +212,10 @@ class Fsr {
 /*** END Fsr Class ***/
 
 /* Define the sensors and set their pins */
+// A0 | Left
+// A1 | Down
+// A2 | Up
+// A3 | Right
 Fsr fsrs[] = {
   Fsr(A0),
   Fsr(A1),
