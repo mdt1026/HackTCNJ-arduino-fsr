@@ -7,15 +7,17 @@ interface ModalProps {
   setToggleModalCallback: (value: boolean) => void;
 }
 
+const ws = new WebSocket("ws://0.0.0.0:5000/ws");
+
 const Modal: React.FC<ModalProps> = ({ pads, setToggleModalCallback }) => {
   const uniquePads = [...new Set(pads)];
   const [padsData, setPadsData] = useState<any[]>([]);
   const [def, setDef] = useState<any[]>([]);
+  const [thresholds, setThresholds] = useState<any[]>([0, 0, 0, 0]);
+  const [index, setIndex] = useState<number>(0);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const ws = new WebSocket("ws://0.0.0.0:5000/ws");
-
     ws.onopen = () => {
       console.log("WebSocket connection established");
     };
@@ -65,53 +67,59 @@ const Modal: React.FC<ModalProps> = ({ pads, setToggleModalCallback }) => {
         onClick={() => setToggleModalCallback(false)}
         className="absolute right-0 top-0 m-4"
       />
-      {uniquePads.map((pad) => (
-        <>
-          <p>
-            {pad} | Thresholds:{" "}
-            {padsData[0] === "thresholds"
-              ? pad === "PadLeft"
-                ? padsData[1].thresholds[0]
-                : pad === "PadBottom"
-                ? padsData[1].thresholds[1]
-                : pad === "PadTop"
-                ? padsData[1].thresholds[2]
-                : pad === "PadRight"
-                ? padsData[1].thresholds[3]
-                : 0
-              : def.length !== 0
-              ? pad === "PadLeft"
-                ? def[1].thresholds[0]
-                : pad === "PadBottom"
-                ? def[1].thresholds[1]
-                : pad === "PadTop"
-                ? def[1].thresholds[2]
-                : pad === "PadRight"
-                ? def[1].thresholds[3]
-                : 0
-              : 0}
-          </p>
-          <label htmlFor="padData">
-            {padsData[0] === "values"
-              ? pad === "PadLeft"
-                ? padsData[1].values[0]
-                : pad === "PadBottom"
-                ? padsData[1].values[1]
-                : pad === "PadTop"
-                ? padsData[1].values[2]
-                : pad === "PadRight"
-                ? padsData[1].values[3]
-                : 0
-              : 0}
-          </label>
-          <input
-            className="pbbb-4 w-full rounded-md border-0 shadow-xl outline-none"
-            name="padData"
-            type="range"
-            min="1"
-            max="1023"
-            value={
-              padsData[0] === "values"
+      <div className="space-y-8">
+        {uniquePads.map((pad) => (
+          <div className="rounded-md border-0 p-4 shadow-xl">
+            <h1 className="font-bold">{pad}</h1>
+            <p>
+              Thresholds:{" "}
+              <input
+                id={pad}
+                type="number"
+                value={
+                  padsData[0] === "thresholds"
+                    ? pad === "PadLeft"
+                      ? padsData[1].thresholds[0]
+                      : pad === "PadBottom"
+                      ? padsData[1].thresholds[1]
+                      : pad === "PadTop"
+                      ? padsData[1].thresholds[2]
+                      : pad === "PadRight"
+                      ? padsData[1].thresholds[3]
+                      : 0
+                    : def.length !== 0
+                    ? pad === "PadLeft"
+                      ? def[1].thresholds[0]
+                      : pad === "PadBottom"
+                      ? def[1].thresholds[1]
+                      : pad === "PadTop"
+                      ? def[1].thresholds[2]
+                      : pad === "PadRight"
+                      ? def[1].thresholds[3]
+                      : 0
+                    : 0
+                }
+                onChange={(e) => {
+                  console.log(e.target.id);
+                  let i =
+                    e.target.id === "PadLeft"
+                      ? 0
+                      : pad === "PadBottom"
+                      ? 1
+                      : pad === "PadTop"
+                      ? 2
+                      : 3;
+                  let temp: any[] = thresholds;
+                  temp[i] = Number(e.target.value);
+                  setThresholds(temp);
+                  console.log(JSON.stringify(["update_threshold", temp, i]));
+                  ws.send(JSON.stringify(["update_threshold", temp, i])); // left bot top right
+                }}
+              />
+            </p>
+            <label htmlFor="padData">
+              Force:{" "}
+              {padsData[0] === "values"
                 ? pad === "PadLeft"
                   ? padsData[1].values[0]
                   : pad === "PadBottom"
@@ -121,11 +129,31 @@ const Modal: React.FC<ModalProps> = ({ pads, setToggleModalCallback }) => {
                   : pad === "PadRight"
                   ? padsData[1].values[3]
                   : 0
-                : 0
-            }
-          />
-        </>
-      ))}
+                : 0}
+            </label>
+            <input
+              className="h-8 w-full rounded-md border-0 outline-none"
+              name="padData"
+              type="range"
+              min="1"
+              max="1023"
+              value={
+                padsData[0] === "values"
+                  ? pad === "PadLeft"
+                    ? padsData[1].values[0]
+                    : pad === "PadBottom"
+                    ? padsData[1].values[1]
+                    : pad === "PadTop"
+                    ? padsData[1].values[2]
+                    : pad === "PadRight"
+                    ? padsData[1].values[3]
+                    : 0
+                  : 0
+              }
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

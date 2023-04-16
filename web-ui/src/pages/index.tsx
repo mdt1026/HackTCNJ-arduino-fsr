@@ -17,7 +17,7 @@ const Home: NextPage = () => {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="overflox-hidden flex h-full w-full items-center">
+      <main className="flex h-full w-full items-center">
         <MainScene
           toggleModal={toggleModal}
           setToggleModalCallback={setToggleModal}
