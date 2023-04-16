@@ -1,123 +1,105 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { AiOutlineClose } from "react-icons/ai";
+import WebSocket from "isomorphic-ws";
 
 interface ModalProps {
   pads: string[];
   setToggleModalCallback: (value: boolean) => void;
-  defaults: {
-    thresholds: number[];
-  } | null;
-  onCloseWs: () => void;
 }
 
-// Maximum number of historical sensor values to retain
-const MAX_SIZE = 1000;
-
-const Modal: React.FC<ModalProps> = ({
-  pads,
-  setToggleModalCallback,
-  defaults,
-  onCloseWs,
-}) => {
-  let uniquePads = [...new Set(pads)];
-
-  const [isWsReady, setIsWsReady] = useState(false);
-  const webUIDataRef = useRef<{
-    curValues: number[][];
-    oldest: number;
-    curThresholds: number[];
-  }>({
-    curValues: [],
-    oldest: 0,
-    curThresholds: [],
-  });
-
-  const wsRef = useRef<WebSocket | null>(null);
-  const wsCallbacksRef = useRef<{ [key: string]: (msg: any) => void }>({});
-
-  const emit = useCallback(
-    (msg: object) => {
-      if (!wsRef.current || !isWsReady) {
-        throw new Error("emit() called when isWsReady !== true.");
-      }
-      wsRef.current.send(JSON.stringify(msg));
-    },
-    [isWsReady, wsRef]
-  );
-
-  wsCallbacksRef.current.values = (msg: { values: number[] }) => {
-    const webUIData = webUIDataRef.current;
-    if (webUIData.curValues.length < MAX_SIZE) {
-      webUIData.curValues.push(msg.values);
-    } else {
-      webUIData.curValues[webUIData.oldest] = msg.values;
-      webUIData.oldest = (webUIData.oldest + 1) % MAX_SIZE;
-    }
-  };
-
-  wsCallbacksRef.current.thresholds = (msg: { thresholds: number[] }) => {
-    webUIDataRef.current.curThresholds.length = 0;
-    webUIDataRef.current.curThresholds.push(...msg.thresholds);
-  };
+const Modal: React.FC<ModalProps> = ({ pads, setToggleModalCallback }) => {
+  const uniquePads = [...new Set(pads)];
+  const [padsData, setPadsData] = useState<any[]>([]);
+  const [def, setDef] = useState<any[]>([]);
 
   useEffect(() => {
-    let cleaningUp = false;
-    const webUIData = webUIDataRef.current;
+    const ws = new WebSocket("ws://0.0.0.0:5000/ws");
 
-    if (!defaults) {
-      return;
-    }
-
-    webUIData.curValues.length = 0;
-    webUIData.curValues.push(new Array(defaults.thresholds.length).fill(0));
-    webUIData.oldest = 0;
-    webUIDataRef.current.curThresholds.length = 0;
-    webUIDataRef.current.curThresholds.push(...defaults.thresholds);
-
-    const ws = new WebSocket("ws://" + window.location.host + "/ws");
-    wsRef.current = ws;
-
-    ws.addEventListener("open", (ev) => {
-      setIsWsReady(true);
-    });
-
-    ws.addEventListener("error", (ev) => {
-      ws.close();
-    });
-
-    ws.addEventListener("close", (ev) => {
-      if (!cleaningUp) {
-        onCloseWs();
-      }
-    });
-
-    ws.addEventListener("message", (ev) => {
-      const data = JSON.parse(ev.data);
-      const action = data[0];
-      const msg = data[1];
-
-      if (wsCallbacksRef.current[action]) {
-        wsCallbacksRef.current[action](msg);
-      }
-    });
-
-    return () => {
-      cleaningUp = true;
-      setIsWsReady(false);
-      ws.close();
+    ws.onopen = () => {
+      console.log("WebSocket connection established");
+      ws.send("Hello, WebSocket!");
     };
-  }, [defaults, onCloseWs]);
+
+    ws.onmessage = (event: MessageEvent) => {
+      if (eval(event.data)[0] === "thresholds") {
+        console.log(eval(event.data)[1]);
+        setDef(eval(event.data));
+      }
+      setPadsData(eval(event.data));
+      console.log("Received message:", event.data);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed");
+    };
+  }, []);
 
   return (
-    <div className="absolute right-[4vw] h-fit min-h-[70%] w-6/12 bg-white">
+    <div className="absolute right-[4vw] h-fit min-h-[70%] w-6/12 bg-white p-8">
       <AiOutlineClose
         onClick={() => setToggleModalCallback(false)}
         className="absolute right-0 top-0 m-4"
       />
       {uniquePads.map((pad) => (
         <>
-          <p>{pad}</p>
-          <input type="range" min="1" max="1023" />
+          <p>
+            {pad} | Thresholds:{" "}
+            {padsData[0] === "thresholds"
+              ? pad === "PadLeft"
+                ? padsData[1].thresholds[0]
+                : pad === "PadBottom"
+                ? padsData[1].thresholds[1]
+                : pad === "PadTop"
+                ? padsData[1].thresholds[2]
+                : pad === "PadRight"
+                ? padsData[1].thresholds[3]
+                : 0
+              : def.length !== 0
+              ? pad === "PadLeft"
+                ? def[1].thresholds[0]
+                : pad === "PadBottom"
+                ? def[1].thresholds[1]
+                : pad === "PadTop"
+                ? def[1].thresholds[2]
+                : pad === "PadRight"
+                ? def[1].thresholds[3]
+                : 0
+              : 0}
+          </p>
+          <label htmlFor="padData">
+            Force:{" "}
+            {padsData[0] === "values"
+              ? pad === "PadLeft"
+                ? padsData[1].values[0]
+                : pad === "PadBottom"
+                ? padsData[1].values[1]
+                : pad === "PadTop"
+                ? padsData[1].values[2]
+                : pad === "PadRight"
+                ? padsData[1].values[3]
+                : 0
+              : 0}
+          </label>
+          <input
+            className="w-full"
+            name="padData"
+            type="range"
+            min="1"
+            max="1023"
+            value={
+              padsData[0] === "values"
+                ? pad === "PadLeft"
+                  ? padsData[1].values[0]
+                  : pad === "PadBottom"
+                  ? padsData[1].values[1]
+                  : pad === "PadTop"
+                  ? padsData[1].values[2]
+                  : pad === "PadRight"
+                  ? padsData[1].values[3]
+                  : 0
+                : 0
+            }
+          />
         </>
       ))}
     </div>
