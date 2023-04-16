@@ -22,14 +22,14 @@ void input_press(uint8_t id) {
   Keyboard.press('a' + id - 1);
 }
 void input_release(uint8_t id) {
-  Keyboard.press('a' + id - 1);
+  Keyboard.release('a' + id - 1);
 }
 
 /*** END Keyboard | Joystick Functions ***/
 
 const long BAUD_RATE = 57600;
 const size_t MAX_SHARED_SENSORS = 2;
-const uint16_t DEFAULT_THRESHOLD = 1000;
+const uint16_t DEFAULT_THRESHOLD = 50;
 
 uint8_t current_button = 1;
 
@@ -65,12 +65,16 @@ class FsrState {
       if (!_initialized) { return; }
 
       size_t index;
-      if ((index = get_index(fsr_id)) < 0) { return; }
+      if ((index = get_index(fsr_id)) == -1) { return; }
 
       // Turn sensor on if equal to or above the threshold
       // Turn it off if below the threshold
-      if (value >= threshold + PADDING_WIDTH) { _states[index] = FsrState::On; }
-      else if (value < threshold - PADDING_WIDTH) { _states[index] = FsrState::Off; }
+      if (value >= threshold + PADDING_WIDTH) { 
+        _states[index] = FsrState::On;
+      }
+      else if (value < threshold - PADDING_WIDTH) {
+        _states[index] = FsrState::Off;
+      }
 
       if (index == _count - 1) {
         switch (_combined_state) {
@@ -124,7 +128,7 @@ class FsrState {
     bool _initialized;
     size_t _count;
     uint8_t button_id;
-    State _combined_state = FsrState::On;
+    State _combined_state = FsrState::Off;
 
     uint8_t _ids[MAX_SHARED_SENSORS];
     State _states[MAX_SHARED_SENSORS];
@@ -154,14 +158,14 @@ class Fsr {
 
       _state->init();
 
-      if (_state->get_index(id) < 0) { _state->add_fsr(id); }
+      if (_state->get_index(id) == -1) { _state->add_fsr(id); }
       _fsr_id = id;
       _initialized = true;
     }
 
     void eval_fsr(bool will_send) {
       if (!_initialized) { return; }
-      if (_state->get_index(_fsr_id) < 0) { return; }
+      if (_state->get_index(_fsr_id) == -1) { return; }
 
       int16_t value = analogRead(_pin);
       // TODO Implement Moving Average smoothing on sensor value
@@ -219,7 +223,10 @@ const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
 class SerialProcessor {
   public:
-    void init(long baud_rate) { Serial.begin(baud_rate); }
+    void init(long baud_rate) {
+      Serial.begin(baud_rate);
+      while (!Serial) {}
+    }
 
     void read_data() {
       while (Serial.available() > 0) {
