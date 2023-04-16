@@ -6,6 +6,9 @@
 */
 #include <inttypes.h>
 
+#include "fsr_globals.h"
+#include "hma.h"
+
 #if defined(_SFR_BYTE) && defined(_BV) && defined(ADCSRA)
   #define CLEAR_BIT(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
   #define SET_BIT(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
@@ -22,14 +25,12 @@ void input_press(uint8_t id) {
   Keyboard.press('a' + id - 1);
 }
 void input_release(uint8_t id) {
-  Keyboard.press('a' + id - 1);
+  Keyboard.release('a' + id - 1);
 }
 
 /*** END Keyboard | Joystick Functions ***/
 
-const long BAUD_RATE = 57600;
-const size_t MAX_SHARED_SENSORS = 2;
-const uint16_t DEFAULT_THRESHOLD = 1000;
+// extern const size_t WMA_MAX_WIDTH;
 
 uint8_t current_button = 1;
 
@@ -65,12 +66,16 @@ class FsrState {
       if (!_initialized) { return; }
 
       size_t index;
-      if ((index = get_index(fsr_id)) < 0) { return; }
+      if ((index = get_index(fsr_id)) == -1) { return; }
 
       // Turn sensor on if equal to or above the threshold
       // Turn it off if below the threshold
-      if (value >= threshold + PADDING_WIDTH) { _states[index] = FsrState::On; }
-      else if (value < threshold - PADDING_WIDTH) { _states[index] = FsrState::Off; }
+      if (value >= threshold + PADDING_WIDTH) { 
+        _states[index] = FsrState::On;
+      }
+      else if (value < threshold - PADDING_WIDTH) {
+        _states[index] = FsrState::Off;
+      }
 
       if (index == _count - 1) {
         switch (_combined_state) {
@@ -124,7 +129,7 @@ class FsrState {
     bool _initialized;
     size_t _count;
     uint8_t button_id;
-    State _combined_state = FsrState::On;
+    State _combined_state = FsrState::Off;
 
     uint8_t _ids[MAX_SHARED_SENSORS];
     State _states[MAX_SHARED_SENSORS];
@@ -139,7 +144,7 @@ class FsrState {
 class Fsr {
   public:
     // TODO Add moving_average to initialization list
-    Fsr(uint8_t pin, FsrState* state = nullptr) : _initialized(false), _pin(pin), _threshold(DEFAULT_THRESHOLD), _offset(0), _state_owner(false) {}
+    Fsr(uint8_t pin, FsrState* state = nullptr) : _initialized(false), _pin(pin), _threshold(DEFAULT_THRESHOLD), _hma(WMA_MAX_WIDTH), _offset(0), _state_owner(false) {}
 
     ~Fsr() { if (_state_owner) { delete _state; } }
 
@@ -154,22 +159,20 @@ class Fsr {
 
       _state->init();
 
-      if (_state->get_index(id) < 0) { _state->add_fsr(id); }
+      if (_state->get_index(id) == -1) { _state->add_fsr(id); }
       _fsr_id = id;
       _initialized = true;
     }
 
     void eval_fsr(bool will_send) {
       if (!_initialized) { return; }
-      if (_state->get_index(_fsr_id) < 0) { return; }
+      if (_state->get_index(_fsr_id) == -1) { return; }
 
-      int16_t value = analogRead(_pin);
-      // TODO Implement Moving Average smoothing on sensor value
-      if (_offset > value) {
-        _value = 0;
-      } else {
-        _value = value - _offset;
-      }
+      uint16_t value = analogRead(_pin);
+
+      // DONE Implement Moving Average smoothing on sensor value
+      uint16_t smooth_value = _hma.get_average(value) - _offset;
+      _value = constrain(smooth_value, 0, 1023);
 
       if (will_send) { _state->eval_fsr(_fsr_id, _value, _threshold); }
     }
@@ -199,18 +202,22 @@ class Fsr {
     uint16_t _value;
     uint16_t _offset;
 
-    // TODO HullMovingAverage moving_average_
+    HullMovingAverage _hma;
     FsrState* _state;
 };
 
 /*** END Fsr Class ***/
 
 /* Define the sensors and set their pins */
+// A3 | Left
+// A2 | Down
+// A0 | Up
+// A1 | Right
 Fsr fsrs[] = {
+  Fsr(A3),
+  Fsr(A2),
   Fsr(A0),
   Fsr(A1),
-  Fsr(A2),
-  Fsr(A3),
 };
 const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
@@ -219,7 +226,10 @@ const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
 class SerialProcessor {
   public:
-    void init(long baud_rate) { Serial.begin(baud_rate); }
+    void init(long baud_rate) {
+      Serial.begin(baud_rate);
+      while (!Serial) {}
+    }
 
     void read_data() {
       while (Serial.available() > 0) {
