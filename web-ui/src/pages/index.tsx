@@ -1,5 +1,5 @@
 import { type NextPage } from "next";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
 
 import MainScene from "~/components/MainScene";
@@ -7,11 +7,7 @@ import Modal from "~/components/Modal";
 
 const Home: NextPage = () => {
   const [toggleModal, setToggleModal] = useState(false);
-  const [pads, setPads] = useState([]);
-
-  useEffect(() => {
-    console.log(pads);
-  }, [pads]);
+  const [pads, setPads] = useState<string[]>([]);
 
   return (
     <>
@@ -29,7 +25,12 @@ const Home: NextPage = () => {
           setPadsCallback={setPads}
         />
         {toggleModal ? (
-          <Modal pads={pads} setToggleModalCallback={setToggleModal} />
+          <Modal
+            pads={pads}
+            setToggleModalCallback={setToggleModal}
+            // defaults={defaults}
+            // onCloseWs={onCloseWs}
+          />
         ) : (
           <></>
         )}

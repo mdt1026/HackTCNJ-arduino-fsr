@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tweenjs/tween.js": "^19.0.0",
+    "isomorphic-ws": "^5.0.0",
     "next": "^13.2.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",

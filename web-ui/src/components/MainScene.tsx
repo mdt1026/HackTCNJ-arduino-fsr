@@ -4,13 +4,16 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { useEffect, useRef, useState } from "react";
+import { Object3D } from "three";
 
-export default function MainScene(props: {
+interface PropsType {
   toggleModal: boolean;
-  setToggleModalCallback: any;
+  setToggleModalCallback: (value: boolean) => void;
   pads: string[];
-  setPadsCallback: any;
-}) {
+  setPadsCallback: (callback: (oldPads: string[]) => string[]) => void;
+}
+
+export default function MainScene(props: PropsType) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -68,8 +71,8 @@ export default function MainScene(props: {
     dracoLoader.setDecoderPath("/draco/");
     loader.setDRACOLoader(dracoLoader);
 
-    let desiredChild: THREE.Object3D[] = [];
-    let GLTFScene: any;
+    const desiredChild: Object3D[] = [];
+    let GLTFScene: Object3D | null = null;
 
     loader.load(
       "/models/main.glb",
@@ -79,7 +82,7 @@ export default function MainScene(props: {
         console.log(gltf.scene);
         GLTFScene = gltf.scene;
 
-        for (let child of gltf.scene.children) {
+        for (const child of gltf.scene.children) {
           if (
             child.name === "PadLeft" ||
             child.name === "PadTop" ||
@@ -114,20 +117,22 @@ export default function MainScene(props: {
       // Calculate objects intersecting the picking ray
       const intersects = raycaster.intersectObjects(scene.children, true);
 
-      for (let intersect of intersects) {
+      for (const intersect of intersects) {
         if (desiredChild.includes(intersect.object)) {
           // console.log(intersect);
 
-          desiredChild.forEach((child) => {
+          desiredChild.forEach((child: Object3D) => {
             if (child.name === intersect.object.name) {
               // Add the color to the object that was clicked
-              if (child.material.color.getHex() === 0x000000) {
-                child.material.color.set(2960685);
+              const material = (child as THREE.Mesh)
+                .material as THREE.MeshBasicMaterial;
+              if (material.color.getHex() === 0x000000) {
+                material.color.set(2960685);
                 props.setPadsCallback((oldPads: string[]) => {
                   return oldPads.filter((pad) => pad !== child.name);
                 });
               } else {
-                child.material.color.set(0x000000);
+                material.color.set(0x000000);
                 props.setPadsCallback((oldPads: string[]) => {
                   return [...oldPads, child.name];
                 });
@@ -136,10 +141,12 @@ export default function MainScene(props: {
           });
           moveCameraTo(new THREE.Vector3(5, 10, 0), 800);
 
-          const newPosition = GLTFScene.position.clone();
-          if (newPosition.z === 0) {
-            newPosition.z += 2;
-            moveObjectTo(GLTFScene, newPosition, 800);
+          if (GLTFScene) {
+            const newPosition = GLTFScene.position.clone();
+            if (newPosition.z === 0) {
+              newPosition.z += 2;
+              moveObjectTo(GLTFScene, newPosition, 800);
+            }
           }
 
           props.setToggleModalCallback(true);
@@ -149,7 +156,7 @@ export default function MainScene(props: {
     }
 
     // Function to smoothly move the camera to a new position
-    function moveCameraTo(newPosition: THREE.Vector3, duration: number) {
+    function moveCameraTo(newPosition: THREE.Vector3, duration: number): void {
       const initialPosition = new THREE.Vector3().copy(camera.position);
       const tween = new TWEEN.Tween(initialPosition)
         .to(newPosition, duration)
@@ -171,7 +178,7 @@ export default function MainScene(props: {
       object: THREE.Object3D,
       newPosition: THREE.Vector3,
       duration: number
-    ) {
+    ): void {
       const initialPosition = new THREE.Vector3().copy(object.position);
       const tween = new TWEEN.Tween(initialPosition)
         .to(newPosition, duration)
