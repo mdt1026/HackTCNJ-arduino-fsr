@@ -209,15 +209,15 @@ class Fsr {
 /*** END Fsr Class ***/
 
 /* Define the sensors and set their pins */
-// A3 | Left
-// A2 | Down
-// A0 | Up
-// A1 | Right
+// A4  | Left
+// A8  | Down
+// A1  | Up
+// A11 | Right
 Fsr fsrs[] = {
-  Fsr(A3),
-  Fsr(A2),
-  Fsr(A0),
+  Fsr(A4),
+  Fsr(A8),
   Fsr(A1),
+  Fsr(A11),
 };
 const size_t NUM_FSRS = sizeof(fsrs) / sizeof(Fsr);
 
